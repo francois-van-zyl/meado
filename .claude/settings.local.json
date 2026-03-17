@@ -21,7 +21,11 @@
       "Bash(npx tsc:*)",
       "Bash(node_modules/.bin/next build:*)",
       "Bash(find /Users/francoisvanzyl/Documents/code/meado -not -path */node_modules/* -not -path */.next/* -type f)",
-      "Skill(update-config)"
+      "Skill(update-config)",
+      "Bash(git checkout:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)"
     ]
   }
 }
