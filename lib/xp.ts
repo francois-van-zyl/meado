@@ -1,3 +1,15 @@
+/**
+ * lib/xp.ts
+ *
+ * Pure functions for Meado's XP and levelling system. All functions
+ * are stateless — they take numbers and return numbers.
+ *
+ * Level formula: floor(sqrt(totalXp / 100)) + 1. This gives fast early
+ * levels (onboarding momentum) and naturally slower later levels without
+ * a hand-tuned table. The constant 100 can be adjusted to rebalance the
+ * curve. Streak multipliers are applied at completion time and stored on
+ * the habit_completions row — they are not recalculated retroactively.
+ */
 export function calculateLevel(totalXp: number): number {
   return Math.floor(Math.sqrt(totalXp / 100)) + 1
 }

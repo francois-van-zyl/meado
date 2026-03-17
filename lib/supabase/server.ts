@@ -1,3 +1,15 @@
+/**
+ * lib/supabase/server.ts
+ *
+ * Creates a Supabase server client for use in Server Components, Route
+ * Handlers, and server actions. Must be async because it awaits the
+ * Next.js cookie store.
+ *
+ * The setAll try/catch is intentional — when called from a Server
+ * Component (as opposed to a Route Handler), cookie mutations are
+ * silently ignored by Next.js. The catch prevents that from throwing.
+ * For client-side Supabase access use lib/supabase/client.ts instead.
+ */
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 

@@ -1,3 +1,17 @@
+/**
+ * proxy.ts
+ *
+ * Next.js 16 middleware (exported as `proxy`, not `middleware`). Handles
+ * all auth-based routing: redirects unauthenticated users away from
+ * protected routes, redirects authenticated users away from auth pages,
+ * and gates /dashboard behind completed onboarding.
+ *
+ * Important: Next.js 16 uses proxy.ts instead of middleware.ts. Having
+ * both files causes a silent blank-screen error with no console output.
+ * All routing logic must live here only — do not create middleware.ts.
+ * Onboarding completion is detected by the presence of display_name in
+ * the profiles table: null means new user, any value means ready.
+ */
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 

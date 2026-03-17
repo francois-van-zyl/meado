@@ -1,4 +1,19 @@
 /**
+ * lib/streaks.ts
+ *
+ * Calculates the current consecutive habit streak from an array of
+ * completion date strings. Called after every habit toggle on the
+ * dashboard so the streak stays accurate in real time.
+ *
+ * Important: all date comparisons use local time methods (getFullYear,
+ * getMonth, getDate), not toISOString(). toISOString() returns UTC —
+ * in Cape Town (UTC+2) this shifts dates back by one day late at night,
+ * silently breaking streak detection. The cursor is initialised as
+ * localDateStr + 'T00:00:00' (local midnight) so setDate() steps
+ * cleanly through days without DST edge cases.
+ */
+
+/**
  * Calculate the current consecutive streak from an array of completion date strings.
  * Dates may contain duplicates (one per habit completion per day).
  *

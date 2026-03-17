@@ -1,3 +1,17 @@
+/**
+ * app/dashboard/page.tsx
+ *
+ * The main Meado dashboard — the meadow view. Renders today's habits,
+ * yesterday's backfill section, the Seeds/Bloom XP bar, the streak
+ * counter, and the weekly boss battle card.
+ *
+ * Habits are toggleable: tap to complete, tap again to undo. This is
+ * only allowed for today's habits — yesterday's backfill locks on
+ * completion and all habits lock at midnight. After every toggle,
+ * refreshStreak() recalculates and persists current_streak and
+ * longest_streak. All dates use local time (not toISOString/UTC) to
+ * avoid date-shift bugs in non-UTC timezones.
+ */
 'use client'
 
 import { useEffect, useState } from 'react'

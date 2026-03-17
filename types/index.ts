@@ -1,3 +1,15 @@
+/**
+ * types/index.ts
+ *
+ * TypeScript interfaces mirroring the Supabase database schema. Import
+ * these wherever row data is passed between functions or stored in state.
+ *
+ * Note: unlock_condition on Reward is typed as Record<string, unknown>
+ * because JSONB is schema-less at the database level. The actual runtime
+ * shape is { type: 'streak' | 'seeds', value: number } — see
+ * app/dashboard/rewards/page.tsx for the local UnlockCondition type that
+ * narrows this for use in that page.
+ */
 export interface Profile {
   id: string
   username: string

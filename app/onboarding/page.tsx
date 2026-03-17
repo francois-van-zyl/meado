@@ -1,3 +1,18 @@
+/**
+ * app/onboarding/page.tsx
+ *
+ * Eight-step onboarding wizard that runs once per user, immediately
+ * after email confirmation. Collects display name, currency, habit
+ * categories, specific habits, rewards, and boss battle target, then
+ * writes everything to Supabase in a single commit on the final step.
+ *
+ * The presence of display_name in the profiles table is the signal
+ * that onboarding is complete — proxy.ts uses this to gate access to
+ * /dashboard. If display_name is null the user will always be
+ * redirected back here. On the final step, existing habits and rewards
+ * are deleted before re-inserting to prevent duplicates if the user
+ * somehow runs onboarding twice.
+ */
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
