@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd:*)",
+      "Read(//private/tmp/**)",
+      "Bash(npx create-next-app@14 meado-setup --typescript --tailwind --eslint --app --no-src-dir --import-alias \"@/*\" --use-npm)",
+      "Bash(sudo chmod:*)",
+      "Bash(chmod:*)",
+      "Bash(rm:*)",
+      "Bash(npm cache:*)",
+      "Bash(cp:*)",
+      "Bash(npm_config_cache=/tmp/npm-cache npm install @supabase/supabase-js @supabase/ssr framer-motion date-fns canvas-confetti lucide-react 2>&1)",
+      "Bash(npm_config_cache=/tmp/npm-cache npx shadcn@latest init --yes 2>&1)",
+      "Bash(echo:*)",
+      "Bash(npm_config_cache=/tmp/npm-cache npx shadcn@latest init --help 2>&1)"
+    ]
+  }
+}
