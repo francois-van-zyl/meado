@@ -12,7 +12,16 @@
       "Bash(npm_config_cache=/tmp/npm-cache npm install @supabase/supabase-js @supabase/ssr framer-motion date-fns canvas-confetti lucide-react 2>&1)",
       "Bash(npm_config_cache=/tmp/npm-cache npx shadcn@latest init --yes 2>&1)",
       "Bash(echo:*)",
-      "Bash(npm_config_cache=/tmp/npm-cache npx shadcn@latest init --help 2>&1)"
+      "Bash(npm_config_cache=/tmp/npm-cache npx shadcn@latest init --help 2>&1)",
+      "Bash(open:*)",
+      "Bash(npm run:*)",
+      "Bash(npm_config_cache=/tmp/npm-cache npm install next@latest react@latest react-dom@latest 2>&1)",
+      "Bash(node:*)",
+      "WebSearch",
+      "Bash(npx tsc:*)",
+      "Bash(node_modules/.bin/next build:*)",
+      "Bash(find /Users/francoisvanzyl/Documents/code/meado -not -path */node_modules/* -not -path */.next/* -type f)",
+      "Skill(update-config)"
     ]
   }
 }

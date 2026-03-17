@@ -9,8 +9,17 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        background: "var(--background)",
-        foreground: "var(--foreground)",
+        background: "#FAF6EE",
+        card: "#EDE5D0",
+        border: "#D6CBAF",
+        foreground: "#3D2B1A",
+        muted: "#8C6D50",
+        primary: "#7A9E7E",
+        accent: "#E8A840",
+      },
+      fontFamily: {
+        lora: ["var(--font-lora)", "serif"],
+        nunito: ["var(--font-nunito)", "sans-serif"],
       },
     },
   },
