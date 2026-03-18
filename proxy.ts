@@ -52,6 +52,7 @@ export async function proxy(request: NextRequest) {
   const isAuthPage =
     pathname === '/login' || pathname === '/signup' || pathname === '/confirm'
   const isDashboard = pathname.startsWith('/dashboard')
+  const isOnboarding = pathname.startsWith('/onboarding')
 
   // Unauthenticated user hitting a protected route → login
   if (isProtected && !user) {
@@ -60,8 +61,8 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(loginUrl)
   }
 
-  // Authenticated user on auth pages or dashboard — profile check needed
-  if (user && (isAuthPage || isDashboard)) {
+  // Authenticated user on auth pages, onboarding, or dashboard — profile check needed
+  if (user && (isAuthPage || isDashboard || isOnboarding)) {
     const { data: profile } = await supabase
       .from('profiles')
       .select('display_name')
@@ -81,6 +82,13 @@ export async function proxy(request: NextRequest) {
       // Dashboard requires completed onboarding
       const dest = request.nextUrl.clone()
       dest.pathname = '/onboarding'
+      return NextResponse.redirect(dest)
+    }
+
+    if (isOnboarding && hasProfile) {
+      // Completed users should not return to onboarding
+      const dest = request.nextUrl.clone()
+      dest.pathname = '/dashboard'
       return NextResponse.redirect(dest)
     }
   }
