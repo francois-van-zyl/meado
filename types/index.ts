@@ -12,15 +12,15 @@
  */
 export interface Profile {
   id: string
-  username: string
-  display_name: string
+  username: string | null
+  display_name: string | null
   currency: string
   timezone: string
   level: number
   total_xp: number
   current_streak: number
   longest_streak: number
-  last_active_date: string
+  last_active_date: string | null
   created_at: string
 }
 
@@ -28,11 +28,11 @@ export interface Habit {
   id: string
   user_id: string
   name: string
-  description: string
+  description: string | null
   category: 'health' | 'fitness' | 'finance' | 'mental_health'
-  icon: string
+  icon: string | null
   xp_value: number
-  color: string
+  color: string | null
   is_active: boolean
   sort_order: number
   created_at: string
@@ -52,12 +52,12 @@ export interface Reward {
   id: string
   user_id: string
   name: string
-  description: string
+  description: string | null
   category: 'digital' | 'real_world' | 'boss_battle'
-  xp_cost: number
-  unlock_condition: Record<string, unknown>
+  xp_cost: number | null
+  unlock_condition: Record<string, unknown> | null
   is_redeemed: boolean
-  redeemed_at: string
+  redeemed_at: string | null
   created_at: string
 }
 
@@ -67,8 +67,8 @@ export interface BossBattle {
   week_start: string
   week_end: string
   target_completion_pct: number
-  reward_id: string
+  reward_id: string | null
   is_won: boolean
-  actual_completion_pct: number
+  actual_completion_pct: number | null
   created_at: string
 }

@@ -16,7 +16,7 @@ The name carries three meanings: **Me** (personal), **Do** (daily action), **Mea
 - **Garden Log** — streak history, 28-day completion grid, 7-day chart, boss battle record
 - **ADHD-friendly onboarding** — 8-step guided wizard, one decision per screen, 2 minutes to set up
 - **Multi-user ready** — each user's data is completely isolated via Supabase Row Level Security
-- **24-hour grace window** — backfill yesterday's habits if you forgot to log
+- **Account sign-out** — switch cleanly between staging or real user accounts during testing
 
 ---
 
@@ -45,6 +45,8 @@ meado/
 │   │   ├── confirm/page.tsx
 │   │   └── layout.tsx
 │   ├── auth/callback/route.ts    # Supabase auth callback handler
+│   ├── api/habits/
+│   │   └── today-toggle/route.ts # Server-owned today's habit toggle mutation
 │   ├── onboarding/page.tsx       # 8-step setup wizard
 │   └── dashboard/
 │       ├── page.tsx              # Main daily habit view
@@ -59,8 +61,10 @@ meado/
 │   ├── supabase/
 │   │   ├── client.ts             # Browser-side Supabase client
 │   │   └── server.ts             # Server-side Supabase client
+│   ├── dates.ts                  # Shared local-date helpers
 │   ├── xp.ts                     # Level and Seeds calculations
 │   └── streaks.ts                # Streak calculation (local time aware)
+├── tests/                        # Node-based automated tests for core logic
 ├── hooks/                        # React data hooks
 ├── types/index.ts                # TypeScript types for all DB tables
 ├── proxy.ts                      # Route protection and auth middleware
@@ -115,6 +119,13 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
+**7. Run quality checks:**
+```bash
+npm run lint
+npx tsc --noEmit
+npm test
+```
+
 ---
 
 ## Deploying to Vercel
@@ -147,13 +158,14 @@ To restrict signups: Supabase → Authentication → disable "Enable email signu
 - [x] 8-step ADHD-friendly onboarding wizard
 - [x] Daily habit tracking with Seeds, streaks, and multipliers
 - [x] Tap to complete, tap to undo (same day)
-- [x] 24-hour grace window for yesterday's habits
 - [x] Weekly disturbance mechanic with progress tracking
 - [x] Rewards system with progress bars and claiming
 - [x] Habits management — add, edit, hide, delete
 - [x] Garden Log — streaks, 28-day grid, 7-day chart, boss record
 - [x] Multi-user support with Row Level Security
 - [x] Holistic reward guardrails (finance habits filter spend rewards)
+- [x] Sign out flow for safer account switching during testing
+- [x] Basic automated coverage for shared date, XP, and streak logic
 
 ### Build 2 (planned)
 - [ ] Pixel art visual layer — meadow scenes, buildings, animals
