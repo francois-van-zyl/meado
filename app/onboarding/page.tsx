@@ -332,7 +332,7 @@ export default function OnboardingPage() {
               Tend to yourself, every day.
             </p>
             <p className="font-nunito text-foreground text-sm mb-10 leading-relaxed">
-              Let's set up your meadow.<br />Takes about 2 minutes.
+              Let&apos;s set up your meadow.<br />Takes about 2 minutes.
             </p>
             <button
               onClick={next}
@@ -612,7 +612,7 @@ export default function OnboardingPage() {
           <div className="bg-card border border-border rounded-2xl px-8 py-10 shadow-sm">
             {progressBar}
             <h2 className="font-lora text-3xl text-foreground mb-2 text-center">
-              Every week you'll face a disturbance
+              Every week you&apos;ll face a disturbance
             </h2>
             <p className="font-nunito text-muted text-sm text-center mb-8">
               Complete enough habits to restore calm to your meadow.

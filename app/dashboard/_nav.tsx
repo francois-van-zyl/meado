@@ -1,7 +1,9 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
+import { useState } from 'react'
+import { createClient } from '@/lib/supabase/client'
 
 const NAV_ITEMS = [
   { href: '/dashboard',         label: 'Meadow',  icon: '🌿' },
@@ -12,10 +14,22 @@ const NAV_ITEMS = [
 
 export function DashboardNav({ displayName }: { displayName: string | null }) {
   const pathname = usePathname()
+  const router = useRouter()
+  const [signingOut, setSigningOut] = useState(false)
 
   function isActive(href: string) {
     if (href === '/dashboard') return pathname === '/dashboard'
     return pathname.startsWith(href)
+  }
+
+  async function handleSignOut() {
+    if (signingOut) return
+    setSigningOut(true)
+
+    const supabase = createClient()
+    await supabase.auth.signOut()
+    router.push('/login')
+    router.refresh()
   }
 
   return (
@@ -44,6 +58,16 @@ export function DashboardNav({ displayName }: { displayName: string | null }) {
             </Link>
           ))}
         </nav>
+        <div className="px-3 py-3 border-t border-border">
+          <button
+            onClick={handleSignOut}
+            disabled={signingOut}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg font-nunito text-sm text-foreground hover:bg-background hover:text-primary transition-colors disabled:opacity-60"
+          >
+            <span className="text-lg leading-none">↩</span>
+            {signingOut ? 'Signing out…' : 'Sign out'}
+          </button>
+        </div>
       </aside>
 
       {/* ── Mobile bottom nav ── */}
@@ -62,6 +86,16 @@ export function DashboardNav({ displayName }: { displayName: string | null }) {
             </span>
           </Link>
         ))}
+        <button
+          onClick={handleSignOut}
+          disabled={signingOut}
+          className="flex-1 flex flex-col items-center justify-center gap-0.5 text-muted hover:text-foreground transition-colors disabled:opacity-60"
+        >
+          <span className="text-xl leading-none">↩</span>
+          <span className="font-nunito text-[10px]">
+            {signingOut ? 'Wait…' : 'Sign out'}
+          </span>
+        </button>
       </nav>
     </>
   )

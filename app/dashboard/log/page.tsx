@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { getLastNDays, getTodayString, toLocalDateString } from '@/lib/dates'
 import type { Profile, BossBattle } from '@/types'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -24,13 +25,6 @@ const BOSS_NAMES = [
 ]
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function toDateStr(d: Date): string {
-  const y   = d.getFullYear()
-  const m   = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
-}
 
 function getBossName(weekStart: string): string {
   const seed = Math.floor(new Date(weekStart + 'T00:00:00').getTime() / (7 * 24 * 60 * 60 * 1000))
@@ -58,11 +52,11 @@ function formatWeekRange(days: DayData[]): string {
 }
 
 function getLast7Days(): DayData[] {
-  const today = toDateStr(new Date())
+  const today = getTodayString()
   return Array.from({ length: 7 }, (_, i) => {
     const d = new Date()
     d.setDate(d.getDate() - (6 - i))
-    const date = toDateStr(d)
+    const date = toLocalDateString(d)
     return {
       date,
       label:   d.toLocaleDateString('en-GB', { weekday: 'short' }).slice(0, 3),
@@ -73,11 +67,7 @@ function getLast7Days(): DayData[] {
 }
 
 function getLast28Days(): string[] {
-  return Array.from({ length: 28 }, (_, i) => {
-    const d = new Date()
-    d.setDate(d.getDate() - (27 - i))
-    return toDateStr(d)
-  })
+  return getLastNDays(28)
 }
 
 function formatBattleWeek(weekStart: string): string {
@@ -95,57 +85,59 @@ export default function LogPage() {
   const [bossBattles, setBossBattles]       = useState<BossBattle[]>([])
   const [loading, setLoading]               = useState(true)
 
-  useEffect(() => { loadData() }, [])
+  useEffect(() => {
+    queueMicrotask(() => {
+      void (async () => {
+        const supabase = createClient()
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) return
 
-  async function loadData() {
-    const supabase = createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
+        const since28 = getLast28Days()[0]
 
-    const since28 = getLast28Days()[0]
+        const [profileRes, countRes, completionsRes, battlesRes] = await Promise.all([
+          supabase.from('profiles').select('*').eq('id', user.id).single(),
+          supabase
+            .from('habit_completions')
+            .select('id', { count: 'exact', head: true })
+            .eq('user_id', user.id),
+          supabase
+            .from('habit_completions')
+            .select('completed_date')
+            .eq('user_id', user.id)
+            .gte('completed_date', since28),
+          supabase
+            .from('boss_battles')
+            .select('*')
+            .eq('user_id', user.id)
+            .order('week_start', { ascending: false }),
+        ])
 
-    const [profileRes, countRes, completionsRes, battlesRes] = await Promise.all([
-      supabase.from('profiles').select('*').eq('id', user.id).single(),
-      supabase
-        .from('habit_completions')
-        .select('id', { count: 'exact', head: true })
-        .eq('user_id', user.id),
-      supabase
-        .from('habit_completions')
-        .select('completed_date')
-        .eq('user_id', user.id)
-        .gte('completed_date', since28),
-      supabase
-        .from('boss_battles')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('week_start', { ascending: false }),
-    ])
+        if (profileRes.data) setProfile(profileRes.data)
+        setTotalCompleted(countRes.count ?? 0)
 
-    if (profileRes.data) setProfile(profileRes.data)
-    setTotalCompleted(countRes.count ?? 0)
+        if (completionsRes.data) {
+          // Build counts per day for last 7 days
+          const countByDate: Record<string, number> = {}
+          for (const row of completionsRes.data) {
+            countByDate[row.completed_date] = (countByDate[row.completed_date] ?? 0) + 1
+          }
 
-    if (completionsRes.data) {
-      // Build counts per day for last 7 days
-      const countByDate: Record<string, number> = {}
-      for (const row of completionsRes.data) {
-        countByDate[row.completed_date] = (countByDate[row.completed_date] ?? 0) + 1
-      }
+          const days = getLast7Days().map(d => ({ ...d, count: countByDate[d.date] ?? 0 }))
+          setWeeklyDays(days)
 
-      const days = getLast7Days().map(d => ({ ...d, count: countByDate[d.date] ?? 0 }))
-      setWeeklyDays(days)
+          // Build set of dates with any completion for last 28 days
+          const datesWithCompletion = new Set(
+            completionsRes.data.map((r: { completed_date: string }) => r.completed_date)
+          )
+          setLast28(datesWithCompletion)
+        }
 
-      // Build set of dates with any completion for last 28 days
-      const datesWithCompletion = new Set(
-        completionsRes.data.map((r: { completed_date: string }) => r.completed_date)
-      )
-      setLast28(datesWithCompletion)
-    }
+        if (battlesRes.data) setBossBattles(battlesRes.data)
 
-    if (battlesRes.data) setBossBattles(battlesRes.data)
-
-    setLoading(false)
-  }
+        setLoading(false)
+      })()
+    })
+  }, [])
 
   // ── Skeleton ─────────────────────────────────────────────────────────────────
 
@@ -261,7 +253,7 @@ export default function LogPage() {
             <div key={week} className="flex items-center gap-2">
               {days28.slice(week * 7, week * 7 + 7).map(date => {
                 const hasDone = last28.has(date)
-                const isToday = date === toDateStr(new Date())
+                const isToday = date === getTodayString()
                 return (
                   <div
                     key={date}

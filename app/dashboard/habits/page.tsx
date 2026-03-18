@@ -43,22 +43,24 @@ export default function HabitsPage() {
   const [deleteTarget, setDeleteTarget]       = useState<{ id: string; name: string } | null>(null)
   const [saving, setSaving]                   = useState(false)
 
-  useEffect(() => { loadHabits() }, [])
+  useEffect(() => {
+    queueMicrotask(() => {
+      void (async () => {
+        const supabase = createClient()
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) return
 
-  async function loadHabits() {
-    const supabase = createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
+        const { data } = await supabase
+          .from('habits')
+          .select('id, name, category, icon, xp_value, is_active')
+          .eq('user_id', user.id)
+          .order('sort_order')
 
-    const { data } = await supabase
-      .from('habits')
-      .select('id, name, category, icon, xp_value, is_active')
-      .eq('user_id', user.id)
-      .order('sort_order')
-
-    if (data) setHabits(data)
-    setLoading(false)
-  }
+        if (data) setHabits(data)
+        setLoading(false)
+      })()
+    })
+  }, [])
 
   function startEdit(habit: HabitRow) {
     setAddingCategory(null)

@@ -49,42 +49,42 @@ function formatDate(iso: string): string {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function RewardsPage() {
-  const [profile, setProfile]     = useState<Profile | null>(null)
   const [rewards, setRewards]     = useState<RewardWithProgress[]>([])
   const [loading, setLoading]     = useState(true)
   const [claiming, setClaiming]   = useState<string | null>(null)
   const [claimed, setClaimed]     = useState<string | null>(null)   // just-claimed id for celebration
 
-  useEffect(() => { loadData() }, [])
+  useEffect(() => {
+    queueMicrotask(() => {
+      void (async () => {
+        const supabase = createClient()
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) return
 
-  async function loadData() {
-    const supabase = createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
+        const [profileRes, rewardsRes] = await Promise.all([
+          supabase.from('profiles').select('*').eq('id', user.id).single(),
+          supabase.from('rewards').select('*').eq('user_id', user.id).order('created_at'),
+        ])
 
-    const [profileRes, rewardsRes] = await Promise.all([
-      supabase.from('profiles').select('*').eq('id', user.id).single(),
-      supabase.from('rewards').select('*').eq('user_id', user.id).order('created_at'),
-    ])
+        if (!profileRes.data) { setLoading(false); return }
 
-    if (!profileRes.data) { setLoading(false); return }
+        const prof = profileRes.data as Profile
 
-    const prof = profileRes.data as Profile
+        const mapped: RewardWithProgress[] = (rewardsRes.data ?? []).map((r: Reward) => {
+          const condition = r.unlock_condition as UnlockCondition
+          return {
+            ...r,
+            condition,
+            progress: getProgress(condition, prof),
+            isReady:  isReady(condition, prof),
+          }
+        })
 
-    const mapped: RewardWithProgress[] = (rewardsRes.data ?? []).map((r: Reward) => {
-      const condition = r.unlock_condition as UnlockCondition
-      return {
-        ...r,
-        condition,
-        progress: getProgress(condition, prof),
-        isReady:  isReady(condition, prof),
-      }
+        setRewards(mapped)
+        setLoading(false)
+      })()
     })
-
-    setProfile(prof)
-    setRewards(mapped)
-    setLoading(false)
-  }
+  }, [])
 
   async function claimReward(reward: RewardWithProgress) {
     if (claiming) return
@@ -132,7 +132,7 @@ export default function RewardsPage() {
       {/* ── Header ── */}
       <div>
         <h1 className="font-lora text-3xl text-foreground leading-tight">Your rewards</h1>
-        <p className="font-nunito text-sm text-muted mt-1">What you're tending toward.</p>
+        <p className="font-nunito text-sm text-muted mt-1">What you&apos;re tending toward.</p>
       </div>
 
       {rewards.length === 0 && (

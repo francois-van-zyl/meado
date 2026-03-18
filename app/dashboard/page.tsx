@@ -2,22 +2,19 @@
  * app/dashboard/page.tsx
  *
  * The main Meado dashboard — the meadow view. Renders today's habits,
- * yesterday's backfill section, the Seeds/Bloom XP bar, the streak
- * counter, and the weekly boss battle card.
+ * the Seeds/Bloom XP bar, the streak counter, and the weekly boss
+ * battle card.
  *
- * Habits are toggleable: tap to complete, tap again to undo. This is
- * only allowed for today's habits — yesterday's backfill locks on
- * completion and all habits lock at midnight. After every toggle,
- * refreshStreak() recalculates and persists current_streak and
- * longest_streak. All dates use local time (not toISOString/UTC) to
- * avoid date-shift bugs in non-UTC timezones.
+ * Habits are toggleable: tap to complete, tap again to undo. All date
+ * calculations use local time (not toISOString/UTC) to avoid date-shift
+ * bugs in non-UTC timezones.
  */
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { getTodayString, getWeekBounds } from '@/lib/dates'
 import { calculateLevel, getStreakMultiplier, getStreakMultiplierLabel } from '@/lib/xp'
-import { calculateStreak } from '@/lib/streaks'
 import type { Profile, BossBattle } from '@/types'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -35,8 +32,19 @@ type HabitRow = {
 
 type XpAnimation = {
   id:      number
-  habitId: string   // prefixed with 'y-' for yesterday rows
+  habitId: string
   xp:      number
+}
+
+type TodayToggleResponse = {
+  action: 'completed' | 'undone'
+  completionId: string | null
+  xpEarned: number
+  totalXp: number
+  currentStreak: number
+  longestStreak: number
+  level: number
+  weekDelta: number
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -57,37 +65,6 @@ const CATEGORY_COLOR: Record<string, string> = {
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function getTodayString() {
-  return new Date().toISOString().split('T')[0]
-}
-
-function getYesterdayString() {
-  const d = new Date()
-  d.setDate(d.getDate() - 1)
-  return d.toISOString().split('T')[0]
-}
-
-function formatYesterday(): string {
-  const d = new Date()
-  d.setDate(d.getDate() - 1)
-  return d.toLocaleDateString('en-ZA', { weekday: 'long', month: 'long', day: 'numeric' })
-}
-
-function getWeekBounds() {
-  const today = new Date()
-  const dow   = today.getDay()
-  const mondayOffset = dow === 0 ? -6 : 1 - dow
-  const monday = new Date(today)
-  monday.setDate(today.getDate() + mondayOffset)
-  const sunday = new Date(monday)
-  sunday.setDate(monday.getDate() + 6)
-  return {
-    monday:      monday.toISOString().split('T')[0],
-    sunday:      sunday.toISOString().split('T')[0],
-    daysElapsed: dow === 0 ? 7 : dow,
-  }
-}
 
 function getISOWeek(dateStr: string): number {
   const d   = new Date(dateStr + 'T00:00:00')
@@ -206,26 +183,21 @@ export default function DashboardPage() {
   const [loading, setLoading]                     = useState(true)
   const [profile, setProfile]                     = useState<Profile | null>(null)
   const [habits, setHabits]                       = useState<HabitRow[]>([])
-  const [yesterdayHabits, setYesterdayHabits]     = useState<HabitRow[]>([])
-  const [yesterdayExpanded, setYesterdayExpanded] = useState(false)
   const [bossBattle, setBossBattle]               = useState<BossBattle | null>(null)
   const [weekCount, setWeekCount]                 = useState(0)
   const [animations, setAnimations]               = useState<XpAnimation[]>([])
+  const pendingHabitIdsRef                        = useRef<Set<string>>(new Set())
+  const refreshTimeoutRef                         = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  useEffect(() => { loadDashboard() }, [])
-
-  // ── Data loading ─────────────────────────────────────────────────────────────
-
-  async function loadDashboard() {
+  async function loadDashboardData() {
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
     const today     = getTodayString()
-    const yesterday = getYesterdayString()
     const { monday, sunday } = getWeekBounds()
 
-    const [profileRes, habitsRes, bossRes, weekRes, yesterdayRes] = await Promise.all([
+    const [profileRes, habitsRes, bossRes, weekRes] = await Promise.all([
       supabase
         .from('profiles')
         .select('*')
@@ -249,11 +221,6 @@ export default function DashboardPage() {
         .eq('user_id', user.id)
         .gte('completed_date', monday)
         .lte('completed_date', today),
-      supabase
-        .from('habit_completions')
-        .select('habit_id')
-        .eq('user_id', user.id)
-        .eq('completed_date', yesterday),
     ])
 
     if (profileRes.data) setProfile(profileRes.data)
@@ -263,7 +230,6 @@ export default function DashboardPage() {
         id: string; name: string; category: string; icon: string; xp_value: number
         habit_completions: { id: string; completed_date: string; xp_earned: number }[]
       }
-      const completedYesterdayIds = new Set(yesterdayRes.data?.map(c => c.habit_id) ?? [])
 
       const mapped = (habitsRes.data as RawHabit[]).map(h => {
         const todayCompletion = h.habit_completions?.find(c => c.completed_date === today)
@@ -276,20 +242,9 @@ export default function DashboardPage() {
           completed:     !!todayCompletion,
           completionId:  todayCompletion?.id,
           completionXp:  todayCompletion?.xp_earned,
-        }
-      })
+            }
+          })
       setHabits(mapped)
-
-      setYesterdayHabits(
-        (habitsRes.data as RawHabit[]).map(h => ({
-          id:        h.id,
-          name:      h.name,
-          category:  h.category,
-          icon:      h.icon,
-          xp_value:  h.xp_value,
-          completed: completedYesterdayIds.has(h.id),
-        }))
-      )
     }
 
     setWeekCount(weekRes.count ?? 0)
@@ -308,157 +263,88 @@ export default function DashboardPage() {
     setLoading(false)
   }
 
-  // ── Streak refresh (called after every completion / reversal) ───────────────
+  function scheduleDashboardRefresh() {
+    if (refreshTimeoutRef.current) clearTimeout(refreshTimeoutRef.current)
+    refreshTimeoutRef.current = setTimeout(() => {
+      if (pendingHabitIdsRef.current.size > 0) {
+        scheduleDashboardRefresh()
+        return
+      }
+      void loadDashboardData()
+    }, 200)
+  }
 
-  async function refreshStreak(userId: string) {
-    const supabase = createClient()
-
-    // Use local time so the date matches how completions are stored
-    const since = new Date()
-    since.setDate(since.getDate() - 90)
-    const sinceStr = `${since.getFullYear()}-${String(since.getMonth() + 1).padStart(2, '0')}-${String(since.getDate()).padStart(2, '0')}`
-
-    const { data } = await supabase
-      .from('habit_completions')
-      .select('completed_date')
-      .eq('user_id', userId)
-      .gte('completed_date', sinceStr)
-
-    if (!data) return
-
-    const dates = data.map((c: { completed_date: string }) => c.completed_date)
-    const newStreak = calculateStreak(dates)
-
-    // Update UI state first
-    let newLongest = newStreak
-    setProfile(prev => {
-      if (!prev) return prev
-      newLongest = Math.max(prev.longest_streak, newStreak)
-      return { ...prev, current_streak: newStreak, longest_streak: newLongest }
+  useEffect(() => {
+    queueMicrotask(() => {
+      void loadDashboardData()
     })
 
-    // Write to Supabase separately — not inside the setter
-    await supabase
-      .from('profiles')
-      .update({ current_streak: newStreak, longest_streak: newLongest })
-      .eq('id', userId)
-  }
+    return () => {
+      if (refreshTimeoutRef.current) clearTimeout(refreshTimeoutRef.current)
+    }
+  }, [])
 
   // ── Today: toggle complete / incomplete ──────────────────────────────────────
 
   async function toggleHabit(habit: HabitRow) {
     if (!profile) return
+    if (pendingHabitIdsRef.current.has(habit.id)) return
+    pendingHabitIdsRef.current.add(habit.id)
 
-    const supabase = createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
+    const isUndo = habit.completed && habit.completionId
+    const xpDelta = isUndo
+      ? -(habit.completionXp ?? habit.xp_value)
+      : Math.round(habit.xp_value * getStreakMultiplier(profile.current_streak))
 
-    if (habit.completed && habit.completionId) {
-      // ── Reverse completion ──
-      const xpToRemove = habit.completionXp ?? habit.xp_value
-      const restoredXp = profile.total_xp - xpToRemove
+    setHabits(prev => prev.map(h =>
+      h.id === habit.id
+        ? {
+            ...h,
+            completed: !isUndo,
+            completionId: isUndo ? undefined : h.completionId,
+            completionXp: isUndo ? undefined : xpDelta,
+          }
+        : h
+    ))
+    setProfile(prev => prev ? { ...prev, total_xp: Math.max(0, prev.total_xp + xpDelta) } : prev)
+    setWeekCount(prev => Math.max(0, prev + (isUndo ? -1 : 1)))
 
-      setHabits(prev => prev.map(h =>
-        h.id === habit.id
-          ? { ...h, completed: false, completionId: undefined, completionXp: undefined }
-          : h
-      ))
-      setProfile(prev => prev ? { ...prev, total_xp: prev.total_xp - xpToRemove } : prev)
-      setWeekCount(prev => Math.max(0, prev - 1))
-
-      await Promise.all([
-        supabase.from('habit_completions').delete().eq('id', habit.completionId),
-        supabase.from('profiles').update({ total_xp: restoredXp }).eq('id', user.id),
-      ])
-      await refreshStreak(user.id)
-    } else if (!habit.completed) {
-      // ── Mark complete ──
-      const multiplier = getStreakMultiplier(profile.current_streak)
-      const xpEarned   = Math.round(habit.xp_value * multiplier)
-      const newTotalXp = profile.total_xp + xpEarned
-
-      setHabits(prev => prev.map(h => h.id === habit.id ? { ...h, completed: true } : h))
-      setProfile(prev => prev ? { ...prev, total_xp: prev.total_xp + xpEarned } : prev)
-      setWeekCount(prev => prev + 1)
-
+    if (!isUndo) {
       const animId = Date.now()
-      setAnimations(prev => [...prev, { id: animId, habitId: habit.id, xp: xpEarned }])
+      setAnimations(prev => [...prev, { id: animId, habitId: habit.id, xp: xpDelta }])
       setTimeout(() => setAnimations(prev => prev.filter(a => a.id !== animId)), 1200)
+    }
 
-      const [completionRes] = await Promise.all([
-        supabase
-          .from('habit_completions')
-          .insert({
-            habit_id:          habit.id,
-            user_id:           user.id,
-            completed_date:    getTodayString(),
-            xp_earned:         xpEarned,
-            streak_multiplier: multiplier,
-          })
-          .select('id')
-          .single(),
-        supabase.from('profiles').update({ total_xp: newTotalXp }).eq('id', user.id),
-      ])
+    try {
+      const response = await fetch('/api/habits/today-toggle', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ habitId: habit.id }),
+      })
 
-      if (completionRes.error || !completionRes.data) {
-        // Revert on DB failure
-        setHabits(prev => prev.map(h => h.id === habit.id ? { ...h, completed: false } : h))
-        setProfile(prev => prev ? { ...prev, total_xp: prev.total_xp - xpEarned } : prev)
-        setWeekCount(prev => Math.max(0, prev - 1))
+      if (!response.ok) {
+        await loadDashboardData()
         return
       }
 
-      // Store completion ID so the row can be toggled back off
+      const result = await response.json() as TodayToggleResponse
+
       setHabits(prev => prev.map(h =>
         h.id === habit.id
-          ? { ...h, completionId: completionRes.data.id, completionXp: xpEarned }
+          ? {
+              ...h,
+              completed: result.action === 'completed',
+              completionId: result.completionId ?? undefined,
+              completionXp: result.action === 'completed' ? result.xpEarned : undefined,
+            }
           : h
       ))
-
-      await refreshStreak(user.id)
+      scheduleDashboardRefresh()
+    } finally {
+      pendingHabitIdsRef.current.delete(habit.id)
     }
-  }
-
-  // ── Yesterday: backfill (no undo) ────────────────────────────────────────────
-
-  async function completeYesterdayHabit(habit: HabitRow) {
-    if (habit.completed || !profile) return
-
-    const supabase = createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
-
-    const multiplier = getStreakMultiplier(profile.current_streak)
-    const xpEarned   = Math.round(habit.xp_value * multiplier)
-    const newTotalXp = profile.total_xp + xpEarned
-    const yesterday  = getYesterdayString()
-
-    // Optimistic UI
-    setYesterdayHabits(prev => prev.map(h => h.id === habit.id ? { ...h, completed: true } : h))
-    setProfile(prev => prev ? { ...prev, total_xp: newTotalXp } : prev)
-
-    // Count toward boss battle only if yesterday is within the current week
-    const { monday } = getWeekBounds()
-    if (yesterday >= monday) setWeekCount(prev => prev + 1)
-
-    // XP animation (prefixed key so it targets the yesterday row)
-    const animId = Date.now()
-    setAnimations(prev => [...prev, { id: animId, habitId: `y-${habit.id}`, xp: xpEarned }])
-    setTimeout(() => setAnimations(prev => prev.filter(a => a.id !== animId)), 1200)
-
-    // DB write — fire and forget, no undo
-    await Promise.all([
-      supabase.from('habit_completions').insert({
-        habit_id:          habit.id,
-        user_id:           user.id,
-        completed_date:    yesterday,
-        xp_earned:         xpEarned,
-        streak_multiplier: multiplier,
-      }),
-      supabase.from('profiles').update({ total_xp: newTotalXp }).eq('id', user.id),
-    ])
-
-    await refreshStreak(user.id)
   }
 
   // ── Derived values ────────────────────────────────────────────────────────────
@@ -468,7 +354,6 @@ export default function DashboardPage() {
   const { level, end: levelEnd, progress: xpProgress } = getLevelBounds(totalXp)
   const multiplierLabel  = getStreakMultiplierLabel(streak)
   const allComplete      = habits.length > 0 && habits.every(h => h.completed)
-  const allYesterdayDone = yesterdayHabits.length > 0 && yesterdayHabits.every(h => h.completed)
 
   const { daysElapsed }  = getWeekBounds()
   const totalPossible    = habits.length * daysElapsed
@@ -567,7 +452,7 @@ export default function DashboardPage() {
       {/* ── 4. Today's tending ── */}
       <div>
         <h2 className="font-lora italic text-muted text-base mb-3 px-1">
-          Today's tending
+          Today&apos;s tending
         </h2>
 
         {habits.length === 0 ? (
@@ -596,58 +481,7 @@ export default function DashboardPage() {
         )}
       </div>
 
-      {/* ── 5. Yesterday section ── */}
-      {yesterdayHabits.length > 0 && (
-        <div>
-          {allYesterdayDone ? (
-            /* All done — subtle confirmation, no expand */
-            <div className="flex items-center gap-2 px-1">
-              <span className="font-lora italic text-sm" style={{ color: '#B0A090' }}>
-                Yesterday
-              </span>
-              <span className="font-nunito text-xs text-primary font-semibold">✓</span>
-              <span className="font-nunito text-xs text-muted">all tended</span>
-            </div>
-          ) : (
-            <>
-              {/* Collapsible header */}
-              <button
-                onClick={() => setYesterdayExpanded(v => !v)}
-                className="flex items-center gap-2 px-1 w-full text-left group"
-              >
-                <span className="font-lora italic text-sm" style={{ color: '#B0A090' }}>
-                  Yesterday
-                </span>
-                <span className="font-nunito text-xs text-muted">{formatYesterday()}</span>
-                <svg
-                  className="w-3.5 h-3.5 text-muted ml-auto transition-transform duration-200"
-                  style={{ transform: yesterdayExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}
-                  viewBox="0 0 20 20" fill="currentColor"
-                >
-                  <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
-                </svg>
-              </button>
-
-              {yesterdayExpanded && (
-                <div className="mt-2 bg-card border border-border rounded-2xl overflow-hidden divide-y divide-border opacity-90">
-                  {yesterdayHabits.map(habit => (
-                    <HabitListRow
-                      key={habit.id}
-                      habit={habit}
-                      onComplete={completeYesterdayHabit}
-                      animKey={`y-${habit.id}`}
-                      animations={animations}
-                      // No undo for backfilled completions
-                    />
-                  ))}
-                </div>
-              )}
-            </>
-          )}
-        </div>
-      )}
-
-      {/* ── 6. Boss battle card ── */}
+      {/* ── 5. Boss battle card ── */}
       {bossBattle && (
         <div className="bg-card border border-border rounded-2xl px-5 py-5">
           <div className="flex items-start justify-between mb-1">
